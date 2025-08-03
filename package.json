@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.1.0",
+    "@types/pg": "^8.15.5",
     "@vitest/ui": "^3.2.4",
     "mastra": "^0.10.18",
     "tsx": "^4.20.3",

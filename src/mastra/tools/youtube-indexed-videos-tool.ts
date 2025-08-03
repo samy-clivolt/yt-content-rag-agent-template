@@ -87,7 +87,7 @@ export const youtubeIndexedVideosTool = createTool({
       const videosResult = await pgClient.query(videosQuery, queryParams);
       
       // Format results
-      const videos = videosResult.rows.map(row => ({
+      const videos = videosResult.rows.map((row: any) => ({
         id: row.id,
         videoUrl: row.video_url,
         videoTitle: row.video_title,

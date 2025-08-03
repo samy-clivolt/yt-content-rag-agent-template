@@ -140,7 +140,7 @@ export const youtubeSearchAnalyticsTool = createTool({
       const analyticsResult = await pgClient.query(analyticsQuery, [limit]);
       
       // Format analytics results
-      const analytics = analyticsResult.rows.map(row => ({
+      const analytics = analyticsResult.rows.map((row: any) => ({
         groupKey: row.group_key,
         count: parseInt(row.count),
         avgResultsCount: parseFloat(row.avg_results_count),

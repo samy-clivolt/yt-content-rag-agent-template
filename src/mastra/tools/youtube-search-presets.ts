@@ -1,23 +1,24 @@
-import { youtubeHybridVectorQueryTool } from './youtube-hybrid-vector-query-tool';
-import { RuntimeContext } from '@mastra/core/runtime-context';
+/**
+ * YouTube Search Presets Tool
+ * 
+ * Pre-configured search strategies for common YouTube content discovery patterns.
+ * Each preset optimizes for specific use cases with tailored filters and weights.
+ */
 
-export interface SearchPresetOptions {
-  indexName: string;
-  topK?: number;
-  runtimeContext?: RuntimeContext;
-}
+import { youtubeHybridVectorQueryTool } from './youtube-hybrid-vector-query-tool';
 
 /**
- * Search for recent and popular content
- * @param query The search query
- * @param days Number of days to look back (default: 30)
- * @param minViews Minimum view count (default: 10000)
+ * Search for recently trending videos
+ * Focuses on recent uploads with high view counts
  */
-export async function searchRecentPopular(
+export async function searchTrendingVideos(
   query: string,
-  options: SearchPresetOptions & {
+  options: {
+    indexName: string;
+    topK?: number;
     days?: number;
     minViews?: number;
+    runtimeContext?: any;
   }
 ) {
   const { indexName, topK = 10, days = 30, minViews = 10000, runtimeContext } = options;
@@ -30,32 +31,32 @@ export async function searchRecentPopular(
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: {
-        $and: [
-          { publishedAt: { $gte: dateThreshold.toISOString() } },
-          { viewCount: { $gte: minViews } }
-        ]
+        viewCount: { $gte: minViews }
       },
       scoringWeights: {
-        vector: 0.5,
+        vector: 0.4,
         freshness: 0.3,
-        popularity: 0.15,
+        popularity: 0.25,
         tags: 0.05
       }
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
 
 /**
- * Search for content with high engagement
- * @param query The search query
- * @param minEngagementRate Minimum engagement rate percentage (default: 5)
+ * Search for educational content
+ * Prioritizes longer videos with high engagement
  */
-export async function searchByEngagement(
+export async function searchEducationalContent(
   query: string,
-  options: SearchPresetOptions & {
+  options: {
+    indexName: string;
+    topK?: number;
     minEngagementRate?: number;
+    runtimeContext?: any;
   }
 ) {
   const { indexName, topK = 10, minEngagementRate = 5, runtimeContext } = options;
@@ -65,6 +66,7 @@ export async function searchByEngagement(
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: {
         engagementRate: { $gte: minEngagementRate }
       },
@@ -75,19 +77,21 @@ export async function searchByEngagement(
         tags: 0.05
       }
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
 
 /**
- * Search for short chapters on a topic
- * @param query The search query
- * @param maxDurationSeconds Maximum chapter duration in seconds (default: 120)
+ * Search for quick tips and tricks
+ * Targets short, focused content
  */
-export async function searchShortChapters(
+export async function searchQuickTips(
   query: string,
-  options: SearchPresetOptions & {
+  options: {
+    indexName: string;
+    topK?: number;
     maxDurationSeconds?: number;
+    runtimeContext?: any;
   }
 ) {
   const { indexName, topK = 10, maxDurationSeconds = 120, runtimeContext } = options;
@@ -97,29 +101,32 @@ export async function searchShortChapters(
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: {
         chapterDurationSeconds: { $lte: maxDurationSeconds }
       },
       scoringWeights: {
         vector: 0.7,
-        freshness: 0.15,
-        popularity: 0.1,
+        freshness: 0.05,
+        popularity: 0.2,
         tags: 0.05
       }
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
 
 /**
- * Search for content with specific tags
- * @param query The search query
- * @param tags Array of tags to match
+ * Search by specific tags
+ * Finds videos with exact tag matches
  */
 export async function searchByTags(
   query: string,
-  options: SearchPresetOptions & {
+  options: {
+    indexName: string;
+    topK?: number;
     tags: string[];
+    runtimeContext?: any;
   }
 ) {
   const { indexName, topK = 10, tags, runtimeContext } = options;
@@ -129,29 +136,32 @@ export async function searchByTags(
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: {
         tags: { $in: tags }
       },
       scoringWeights: {
         vector: 0.5,
-        freshness: 0.15,
-        popularity: 0.15,
+        freshness: 0.1,
+        popularity: 0.2,
         tags: 0.2
       }
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
 
 /**
- * Search for content from a specific channel
- * @param query The search query
- * @param channelId The YouTube channel ID
+ * Search within a specific channel
+ * Restricts results to videos from one channel
  */
-export async function searchByChannel(
+export async function searchChannelContent(
   query: string,
-  options: SearchPresetOptions & {
+  options: {
+    indexName: string;
+    topK?: number;
     channelId: string;
+    runtimeContext?: any;
   }
 ) {
   const { indexName, topK = 10, channelId, runtimeContext } = options;
@@ -161,6 +171,7 @@ export async function searchByChannel(
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: {
         channelId: { $eq: channelId }
       },
@@ -171,19 +182,21 @@ export async function searchByChannel(
         tags: 0.05
       }
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
 
 /**
- * Search for long-form content
- * @param query The search query
- * @param minDurationMinutes Minimum video duration in minutes (default: 20)
+ * Search for in-depth content
+ * Targets longer, comprehensive videos
  */
-export async function searchLongFormContent(
+export async function searchInDepthContent(
   query: string,
-  options: SearchPresetOptions & {
+  options: {
+    indexName: string;
+    topK?: number;
     minDurationMinutes?: number;
+    runtimeContext?: any;
   }
 ) {
   const { indexName, topK = 10, minDurationMinutes = 20, runtimeContext } = options;
@@ -193,31 +206,71 @@ export async function searchLongFormContent(
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: {
         videoLengthMinutes: { $gte: minDurationMinutes }
       },
       scoringWeights: {
-        vector: 0.65,
-        freshness: 0.15,
-        popularity: 0.15,
+        vector: 0.8,
+        freshness: 0.05,
+        popularity: 0.1,
         tags: 0.05
       }
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
 
 /**
- * Search for trending content (high views and recent)
- * @param query The search query
- * @param days Number of days to look back (default: 7)
- * @param minViews Minimum view count (default: 50000)
+ * Search for viral content
+ * Prioritizes high view count and engagement
  */
-export async function searchTrending(
+export async function searchViralContent(
   query: string,
-  options: SearchPresetOptions & {
+  options: {
+    indexName: string;
+    topK?: number;
+    minViews?: number;
+    minEngagementRate?: number;
+    runtimeContext?: any;
+  }
+) {
+  const { indexName, topK = 10, minViews = 100000, minEngagementRate = 10, runtimeContext } = options;
+  
+  return youtubeHybridVectorQueryTool.execute({
+    context: {
+      queryText: query,
+      indexName,
+      topK,
+      includeScore: true,
+      filter: {
+        viewCount: { $gte: minViews },
+        engagementRate: { $gte: minEngagementRate }
+      },
+      scoringWeights: {
+        vector: 0.5,
+        freshness: 0.05,
+        popularity: 0.4,
+        tags: 0.05
+      }
+    },
+    runtimeContext
+  });
+}
+
+/**
+ * Search for recent updates
+ * Finds fresh content on a topic
+ */
+export async function searchRecentUpdates(
+  query: string,
+  options: {
+    indexName: string;
+    topK?: number;
     days?: number;
     minViews?: number;
+    maxLengthMinutes?: number;
+    runtimeContext?: any;
   }
 ) {
   const { indexName, topK = 10, days = 7, minViews = 50000, runtimeContext } = options;
@@ -230,57 +283,78 @@ export async function searchTrending(
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: {
-        $and: [
-          { publishedAt: { $gte: dateThreshold.toISOString() } },
-          { viewCount: { $gte: minViews } }
-        ]
+        viewCount: { $gte: minViews }
       },
       scoringWeights: {
-        vector: 0.4,
+        vector: 0.5,
         freshness: 0.35,
-        popularity: 0.2,
+        popularity: 0.1,
         tags: 0.05
       }
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
 
 /**
- * Complex search combining multiple criteria
- * @param query The search query
- * @param filters Custom filter object
- * @param scoringWeights Custom scoring weights
+ * Custom preset search
+ * Allows full customization of search parameters
  */
-export async function searchAdvanced(
+export async function searchWithCustomPreset(
   query: string,
-  options: SearchPresetOptions & {
-    filters: any;
+  options: {
+    indexName: string;
+    topK?: number;
+    filters?: Record<string, any>;
     scoringWeights?: {
       vector?: number;
       freshness?: number;
       popularity?: number;
       tags?: number;
     };
+    runtimeContext?: any;
   }
 ) {
   const { 
     indexName, 
     topK = 10, 
-    filters, 
+    filters = {}, 
     scoringWeights = { vector: 0.6, freshness: 0.2, popularity: 0.15, tags: 0.05 },
     runtimeContext 
   } = options;
+  
+  // Ensure all weights are defined
+  const completeWeights = {
+    vector: scoringWeights.vector || 0.6,
+    freshness: scoringWeights.freshness || 0.2,
+    popularity: scoringWeights.popularity || 0.15,
+    tags: scoringWeights.tags || 0.05
+  };
   
   return youtubeHybridVectorQueryTool.execute({
     context: {
       queryText: query,
       indexName,
       topK,
+      includeScore: true,
       filter: filters,
-      scoringWeights
+      scoringWeights: completeWeights
     },
-    runtimeContext: runtimeContext || new RuntimeContext()
+    runtimeContext
   });
 }
+
+// Export all preset functions
+export const youtubeSearchPresets = {
+  trending: searchTrendingVideos,
+  educational: searchEducationalContent,
+  quickTips: searchQuickTips,
+  byTags: searchByTags,
+  channel: searchChannelContent,
+  inDepth: searchInDepthContent,
+  viral: searchViralContent,
+  recent: searchRecentUpdates,
+  custom: searchWithCustomPreset
+};
