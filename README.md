@@ -258,7 +258,9 @@ Extracts and processes YouTube videos into searchable chunks.
 
 **Input:**
 ```typescript
-{ videoUrl: string }
+{ videoUrl: string
+  indexName?: string  // Optional: custom index name (default: 'yt-videos')
+}
 ```
 
 **Output:**
