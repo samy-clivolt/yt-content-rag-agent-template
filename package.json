@@ -1,0 +1,60 @@
+{
+  "name": "yt-content-rag-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:manual": "tsx src/mastra/tools/__tests__/youtube-transcript-tool.manual.ts",
+    "dev": "mastra dev",
+    "build": "mastra build",
+    "start": "mastra start",
+    "setup": "npm run setup:check && npm run setup:env && npm run setup:db",
+    "setup:check": "tsx scripts/check-requirements.js",
+    "setup:env": "tsx scripts/setup-env.js",
+    "setup:db": "tsx scripts/setup-database.js",
+    "setup:db:indexes": "bash scripts/create-all-hybrid-indexes.sh",
+    "setup:youtube": "tsx src/scripts/setup-youtube-oauth.ts",
+    "db:reset": "tsx scripts/reset-database.js",
+    "postinstall": "npm run setup:check --silent || true",
+    "example:index": "tsx examples/index-video.ts",
+    "example:search": "tsx examples/basic-search.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^1.2.12",
+    "@ai-sdk/google": "^1.2.22",
+    "@ai-sdk/openai": "^1.3.23",
+    "@mastra/core": "^0.12.1",
+    "@mastra/libsql": "^0.12.0",
+    "@mastra/loggers": "^0.10.5",
+    "@mastra/mcp": "^0.10.9",
+    "@mastra/memory": "^0.12.0",
+    "@mastra/pg": "^0.13.1",
+    "@mastra/rag": "^1.0.6",
+    "apify-client": "^2.12.6",
+    "dotenv": "^17.2.1",
+    "google-auth-library": "^10.2.0",
+    "googleapis": "^154.1.0",
+    "pg": "^8.13.1",
+    "youtube-captions-scraper": "^2.0.3",
+    "youtube-transcript-api": "^3.0.6",
+    "youtubei.js": "^15.0.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "@vitest/ui": "^3.2.4",
+    "mastra": "^0.10.18",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
