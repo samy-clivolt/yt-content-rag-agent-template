@@ -9,7 +9,7 @@ This template demonstrates how to build a comprehensive YouTube content analysis
 ## Features
 
 - 🎥 **YouTube Content Extraction**: Fetch metadata and transcripts from any YouTube video
-- 🤖 **AI-Powered Chapter Generation**: Automatically create timestamped chapters using GPT-4
+- 🤖 **AI-Powered Chapter Generation**: Automatically create timestamped chapters using GPT-4.1
 - 🔍 **Advanced Search Capabilities**: 
   - Semantic vector search with PgVector
   - Hybrid search combining vector and keyword matching
@@ -47,13 +47,47 @@ Run the automated setup script:
 
 Or set up manually:
 
+**macOS:**
 ```bash
-# Install pgvector (macOS)
+# Install pgvector
 brew install pgvector
 
 # Create database and enable extension
 psql -U postgres -c "CREATE DATABASE yt_rag;"
 psql -U postgres -d yt_rag -f scripts/setup-database.sql
+```
+
+**Windows:**
+```bash
+# Install PostgreSQL if not already installed
+# Download from https://www.postgresql.org/download/windows/
+
+# Install pgvector using pgxn
+# First install pgxn client
+curl -s -L https://github.com/pgxn/pgxn-client/raw/master/pgxn-install.py | python
+
+# Install pgvector
+pgxn install vector
+
+# Or build from source
+git clone https://github.com/pgvector/pgvector.git
+cd pgvector
+nmake /F Makefile.win
+nmake /F Makefile.win install
+
+# Create database
+psql -U postgres -c "CREATE DATABASE yt_rag;"
+psql -U postgres -d yt_rag -f scripts/setup-database.sql
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+# Install pgvector
+sudo apt install postgresql-16-pgvector
+
+# Create database
+sudo -u postgres psql -c "CREATE DATABASE yt_rag;"
+sudo -u postgres psql -d yt_rag -f scripts/setup-database.sql
 ```
 
 ### 3. Configure Environment
@@ -66,9 +100,27 @@ cp .env.example .env
 
 Required environment variables:
 - `POSTGRES_CONNECTION_STRING`: PostgreSQL connection with pgvector
-- `OPENAI_API_KEY`: For embeddings and LLM operations
-- `YOUTUBE_API_KEY`: For fetching video metadata
-- `APIFY_API_TOKEN`: For extracting transcripts
+- `OPENAI_API_KEY`: For embeddings and LLM operations ([Get your key](https://platform.openai.com/api-keys))
+- `YOUTUBE_API_KEY`: For fetching video metadata (see below for setup instructions)
+- `APIFY_API_TOKEN`: For extracting transcripts ([Get your token](https://console.apify.com/account/integrations))
+
+#### How to get a YouTube API Key:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the YouTube Data API v3:
+   - Go to "APIs & Services" → "Library"
+   - Search for "YouTube Data API v3"
+   - Click on it and press "Enable"
+4. Create credentials:
+   - Go to "APIs & Services" → "Credentials"
+   - Click "Create Credentials" → "API Key"
+   - Copy your API key
+5. (Optional) Restrict your API key:
+   - Click on your API key
+   - Under "API restrictions", select "Restrict key"
+   - Select "YouTube Data API v3"
+   - Save
 
 ### 4. Start the Application
 
@@ -76,7 +128,7 @@ Required environment variables:
 npm run dev
 ```
 
-The Mastra server will start on http://localhost:4000
+The Mastra server will start on http://localhost:4111
 
 ## Architecture
 
@@ -116,7 +168,8 @@ import { mastra } from './src/mastra';
 
 const result = await mastra.workflows.youtubeRagWorkflow.execute({
   input: { 
-    videoUrl: 'https://youtube.com/watch?v=VIDEO_ID' 
+    videoUrl: 'https://youtube.com/watch?v=VIDEO_ID',
+    indexName: 'my-youtube-index' // Optional: specify custom index name
   }
 });
 
