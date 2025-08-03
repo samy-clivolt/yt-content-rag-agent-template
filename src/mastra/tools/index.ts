@@ -7,6 +7,7 @@ export { youtubeCustomVectorQueryTool } from './youtube-custom-vector-query-tool
 export { youtubeHybridVectorQueryTool } from './youtube-hybrid-vector-query-tool';
 export { youtubeGraphRAGTool, clearGraphCache } from './youtube-graph-rag-tool';
 export { youtubeIndexMaintenanceTool } from './youtube-index-maintenance-tool';
+export { youtubeRerankTool } from './youtube-rerank-tool';
 export * from './youtube-search-presets';
 
 // Unused tools - kept for potential future use

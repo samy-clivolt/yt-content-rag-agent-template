@@ -8,7 +8,7 @@ import { youtubeMetadataTool } from '../tools/youtube-metadata-tool';
 import { youtubeHybridVectorQueryTool } from '../tools/youtube-hybrid-vector-query-tool';
 import { youtubeCustomVectorQueryTool } from '../tools/youtube-custom-vector-query-tool';
 import { youtubeGraphRAGTool } from '../tools/youtube-graph-rag-tool';
-// import { rerankWithScorer } from '@mastra/rag'; // TODO: Add when available
+import { youtubeRerankTool } from '../tools/youtube-rerank-tool';
 import { z } from 'zod';
 import { youtubeRagWorkflow } from '../workflows/youtube-rag-workflow';
 import { youtubeCotRagWorkflow } from '../workflows/youtube-cot-rag-workflow';
@@ -74,6 +74,16 @@ export const youtubeRAGAgent = new Agent({
 - **Features**: Uses reasoning agent to extract constraints before search
 - **Example**: "Find beginner-friendly content about neural networks, but exclude anything too mathematical"
 
+### 6. rerankResults (Cohere Reranking)
+- **When to use**: After any search to improve result relevance
+- **Best for**: 
+  - Refining search results based on relevance to query
+  - When you have many results but want the most relevant ones
+  - Improving precision for specific information needs
+- **Features**: Uses Cohere's rerank-english-v3.0 model for state-of-the-art reranking
+- **Input**: Original query + search results from any tool
+- **Example**: After searching, rerank the top 50 results to get the best 10
+
 ## Optimal Search Strategy:
 
 1. **Analyze the query type**:
@@ -94,6 +104,12 @@ export const youtubeRAGAgent = new Agent({
    - Start with appropriate tool based on query complexity
    - If results are insufficient, escalate: Basic → Hybrid → GraphRAG
    - Adjust query formulation between attempts
+   - Use rerankResults on the combined results for best relevance
+
+5. **Reranking strategy**:
+   - Get more results initially (e.g., topK: 30-50)
+   - Apply reranking to narrow down to the most relevant
+   - Especially useful after Hybrid or Graph searches
 
 ## Advanced Filtering (Hybrid Search):
 - Filter by date: { "publishedAt": { "$gte": "2024-01-01" } }
@@ -141,6 +157,7 @@ ${PGVECTOR_PROMPT}`,
     searchYouTubeContent: youtubeHybridVectorQueryTool,
     searchYouTubeContentBasic: youtubeCustomVectorQueryTool,
     searchYouTubeContentGraph: youtubeGraphRAGTool,
+    rerankResults: youtubeRerankTool,
     listIndexes: youtubeIndexListTool,
     fetchTranscript: youtubeTranscriptTool,
     fetchMetadata: youtubeMetadataTool,
