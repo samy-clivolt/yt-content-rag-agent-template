@@ -62,7 +62,7 @@ export const youtubeMetadataTool = createTool({
       }).nullish(),
     }),
   }),
-  execute: async ({ context, runtimeContext }) => {
+  execute: async ({ context }) => {
     const { videoUrl } = context;
     
     // Check for YouTube API key
@@ -110,7 +110,7 @@ export const youtubeMetadataTool = createTool({
         viewCount: statistics?.viewCount || undefined,
         likeCount: statistics?.likeCount || undefined,
         commentCount: statistics?.commentCount || undefined,
-        tags: snippet.tags,
+        tags: snippet.tags || undefined,
         thumbnails: {
           default: snippet.thumbnails?.default,
           medium: snippet.thumbnails?.medium,

@@ -73,25 +73,44 @@ const fetchMetadata = createStep({
     channelId: z.string(),
     publishedAt: z.string(),
     duration: z.string(),
-    viewCount: z.string().optional(),
-    likeCount: z.string().optional(),
-    commentCount: z.string().optional(),
+    viewCount: z.string().nullish(),
+    likeCount: z.string().nullish(),
+    commentCount: z.string().nullish(),
     tags: z.array(z.string()).optional(),
     thumbnails: z.object({
-      default: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-      medium: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-      high: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-      standard: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-      maxres: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
+      default: z.object({ 
+        url: z.string().nullish(), 
+        width: z.number().nullish(), 
+        height: z.number().nullish() 
+      }).nullish(),
+      medium: z.object({ 
+        url: z.string().nullish(), 
+        width: z.number().nullish(), 
+        height: z.number().nullish() 
+      }).nullish(),
+      high: z.object({ 
+        url: z.string().nullish(), 
+        width: z.number().nullish(), 
+        height: z.number().nullish() 
+      }).nullish(),
+      standard: z.object({ 
+        url: z.string().nullish(), 
+        width: z.number().nullish(), 
+        height: z.number().nullish() 
+      }).nullish(),
+      maxres: z.object({ 
+        url: z.string().nullish(), 
+        width: z.number().nullish(), 
+        height: z.number().nullish() 
+      }).nullish(),
     }),
   }),
-  execute: async ({ inputData, mastra }) => {
+  execute: async ({ inputData }) => {
     if (!youtubeMetadataTool.execute) {
       throw new Error('YouTube metadata tool execute function not found');
     }
     const result = await youtubeMetadataTool.execute({
-      context: inputData,
-      runtimeContext: mastra
+      context: inputData
     } as any);
     return result;
   }
@@ -111,19 +130,111 @@ const fetchTranscript = createStep({
     })),
     fullText: z.string(),
   }),
-  execute: async ({ inputData, mastra }) => {
+  execute: async ({ inputData }) => {
     if (!youtubeTranscriptTool.execute) {
       throw new Error('YouTube transcript tool execute function not found');
     }
     const result = await youtubeTranscriptTool.execute({
-      context: inputData,
-      runtimeContext: mastra
+      context: inputData
     } as any);
     return result;
   }
 });
 
-// Step 3: Generate keywords using the agent with structured output
+// Step 3: Segment transcript into parts for parallel processing
+const segmentTranscript = createStep({
+  id: 'segment-transcript',
+  inputSchema: z.object({
+    transcript: z.array(z.object({
+      text: z.string(),
+      start: z.string(),
+      duration: z.string()
+    })),
+    fullText: z.string()
+  }),
+  outputSchema: z.object({
+    segments: z.array(z.object({
+      segmentId: z.number(),
+      transcript: z.array(z.object({
+        text: z.string(),
+        start: z.string(),
+        duration: z.string()
+      })),
+      fullText: z.string(),
+      startTime: z.number(),
+      endTime: z.number()
+    }))
+  }),
+  execute: async ({ inputData }) => {
+    const { transcript, fullText } = inputData;
+    const numSegments = 3;
+    
+    // Calculate total duration
+    const lastSegment = transcript[transcript.length - 1];
+    const totalDuration = parseFloat(lastSegment.start) + parseFloat(lastSegment.duration);
+    const segmentDuration = totalDuration / numSegments;
+    
+    const segments = [];
+    for (let i = 0; i < numSegments; i++) {
+      const segmentStartTime = i * segmentDuration;
+      const segmentEndTime = (i + 1) * segmentDuration;
+      
+      // Filter transcript segments that fall within this time range
+      const segmentTranscript = transcript.filter(t => {
+        const startTime = parseFloat(t.start);
+        return startTime >= segmentStartTime && startTime < segmentEndTime;
+      });
+      
+      // Get the text for this segment
+      const segmentText = segmentTranscript
+        .map(t => t.text)
+        .join(' ')
+        .trim();
+      
+      segments.push({
+        segmentId: i + 1,
+        transcript: segmentTranscript,
+        fullText: segmentText,
+        startTime: segmentStartTime,
+        endTime: segmentEndTime
+      });
+    }
+    
+    return { segments };
+  }
+});
+
+// Step 4: Generate keywords for a segment
+const generateKeywordsForSegment = createStep({
+  id: 'generate-keywords-for-segment',
+  inputSchema: z.object({
+    segmentId: z.number(),
+    fullText: z.string()
+  }),
+  outputSchema: z.object({
+    segmentId: z.number(),
+    keywords: z.array(z.string())
+  }),
+  execute: async ({ inputData }) => {
+    const keywordSchema = z.object({
+      keywords: z.array(z.string()).min(3).max(10)
+    });
+    
+    const result = await seoKeywordAgent.generate(
+      [{ role: "user", content: `Extract SEO keywords from this transcript segment: ${inputData.fullText}` }],
+      { 
+        output: keywordSchema
+      }
+    );
+    
+    return {
+      segmentId: inputData.segmentId,
+      keywords: result.object.keywords
+    };
+  }
+});
+
+// Step 4 (original): Generate keywords using the agent with structured output
 const generateKeywords = createStep({
   id: 'generate-keywords',
   inputSchema: z.object({
@@ -148,7 +259,58 @@ const generateKeywords = createStep({
   }
 });
 
-// Step 4: Generate chapters using the agent with structured output
+// Step 5: Generate chapters for a segment
+const generateChaptersForSegment = createStep({
+  id: 'generate-chapters-for-segment',
+  inputSchema: z.object({
+    segmentId: z.number(),
+    transcript: z.array(z.object({
+      text: z.string(),
+      start: z.string(),
+      duration: z.string()
+    })),
+    keywords: z.array(z.string())
+  }),
+  outputSchema: z.object({
+    segmentId: z.number(),
+    chapters: z.array(z.object({
+      timestamp: z.string(),
+      title: z.string()
+    }))
+  }),
+  execute: async ({ inputData }) => {
+    const { segmentId, transcript, keywords } = inputData;
+    
+    const formattedTranscript = formatTranscriptWithTimestamps(transcript);
+    const transcriptText = formattedTranscript.map(s => `[${s.timestamp}] ${s.text}`).join('\n');
+    
+    const instructions = chapterGeneratorAgent.getInstructions();
+    const prompt = (typeof instructions === 'string' ? instructions : await instructions)
+      .replace('{{seo-keywords-to-hit}}', keywords.join(', '))
+      .replace('{{transcript-with-timestamps}}', transcriptText);
+    
+    const chapterSchema = z.object({
+      chapters: z.array(z.object({
+        timestamp: z.string().regex(/^\d{2}:\d{2}$/),
+        title: z.string()
+      })).min(2).max(10) // Reduced min/max for segments
+    });
+    
+    const result = await chapterGeneratorAgent.generate(
+      [{ role: "user", content: prompt }],
+      { 
+        output: chapterSchema
+      }
+    );
+    
+    return {
+      segmentId,
+      chapters: result.object.chapters
+    };
+  }
+});
+
+// Step 5 (original): Generate chapters using the agent with structured output
 const generateChapters = createStep({
   id: 'generate-chapters',
   inputSchema: z.object({
@@ -220,7 +382,88 @@ const chunkWithEmbeddingSchema = chunkSchema.extend({
   embedding: z.array(z.number()).optional()
 });
 
-// Step 5: Extract chapter transcripts
+// Step 6: Extract chapter transcripts for a segment
+const extractChapterTranscriptsForSegment = createStep({
+  id: 'extract-chapter-transcripts-for-segment',
+  inputSchema: z.object({
+    segmentId: z.number(),
+    chapters: z.array(z.object({
+      timestamp: z.string(),
+      title: z.string()
+    })),
+    keywords: z.array(z.string()),
+    transcript: z.array(z.object({
+      text: z.string(),
+      start: z.string(),
+      duration: z.string()
+    }))
+  }),
+  outputSchema: z.object({
+    segmentId: z.number(),
+    chapters: z.array(z.object({
+      timestamp: z.string(),
+      title: z.string(),
+      startTime: z.number(),
+      endTime: z.number(),
+      transcript: z.string(),
+      keywords: z.array(z.string())
+    }))
+  }),
+  execute: async ({ inputData }) => {
+    const { segmentId, chapters, keywords, transcript } = inputData;
+    
+    // Format transcript with timestamps
+    const formattedTranscript = formatTranscriptWithTimestamps(transcript);
+    
+    // Enrich chapters with transcripts
+    const enrichedChapters = chapters.map((chapter, index) => {
+      const startTime = timestampToSeconds(chapter.timestamp);
+      
+      // Calculate end time (start of next chapter or end of segment)
+      let endTime: number;
+      if (index < chapters.length - 1) {
+        endTime = timestampToSeconds(chapters[index + 1].timestamp);
+      } else {
+        // For the last chapter, use the end of the last transcript segment
+        const lastSegment = formattedTranscript[formattedTranscript.length - 1];
+        endTime = lastSegment.endSeconds;
+      }
+      
+      // Extract transcript segments for this chapter
+      const chapterSegments = formattedTranscript.filter(segment => 
+        segment.startSeconds >= startTime && segment.startSeconds < endTime
+      );
+      
+      // Combine segments into chapter transcript
+      const chapterTranscript = chapterSegments
+        .map(segment => segment.text)
+        .join(' ')
+        .trim();
+      
+      // Extract relevant keywords for this chapter
+      const chapterKeywords = keywords.filter(keyword => 
+        chapterTranscript.toLowerCase().includes(keyword.toLowerCase()) ||
+        chapter.title.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      return {
+        timestamp: chapter.timestamp,
+        title: chapter.title,
+        startTime,
+        endTime,
+        transcript: chapterTranscript,
+        keywords: chapterKeywords
+      };
+    });
+    
+    return { 
+      segmentId,
+      chapters: enrichedChapters 
+    };
+  }
+});
+
+// Step 6 (original): Extract chapter transcripts
 const extractChapterTranscripts = createStep({
   id: 'extract-chapter-transcripts',
   inputSchema: z.object({
@@ -287,7 +530,141 @@ const extractChapterTranscripts = createStep({
   }
 });
 
-// Step 6: Chunk chapters using the chunker tool
+// Step 7: Merge segment results
+const mergeSegmentResults = createStep({
+  id: 'merge-segment-results',
+  inputSchema: z.object({
+    segmentResults: z.array(z.object({
+      segmentId: z.number(),
+      keywords: z.array(z.string()),
+      chapters: z.array(z.object({
+        timestamp: z.string(),
+        title: z.string(),
+        startTime: z.number(),
+        endTime: z.number(),
+        transcript: z.string(),
+        keywords: z.array(z.string())
+      }))
+    }))
+  }),
+  outputSchema: z.object({
+    keywords: z.array(z.string()),
+    chapters: z.array(z.object({
+      timestamp: z.string(),
+      title: z.string(),
+      startTime: z.number(),
+      endTime: z.number(),
+      transcript: z.string(),
+      keywords: z.array(z.string())
+    }))
+  }),
+  execute: async ({ inputData }) => {
+    const { segmentResults } = inputData;
+    
+    // Sort segments by ID to ensure correct order
+    const sortedResults = segmentResults.sort((a, b) => a.segmentId - b.segmentId);
+    
+    // Merge all keywords from all segments (remove duplicates)
+    const allKeywords = sortedResults
+      .flatMap(segment => segment.keywords)
+      .filter((keyword, index, self) => self.indexOf(keyword) === index);
+    
+    // Merge all chapters from all segments in chronological order
+    const allChapters = sortedResults
+      .flatMap(segment => segment.chapters)
+      .sort((a, b) => a.startTime - b.startTime);
+    
+    return {
+      keywords: allKeywords,
+      chapters: allChapters
+    };
+  }
+});
+
+// Schema for segment data
+const segmentSchema = z.object({
+  segmentId: z.number(),
+  transcript: z.array(z.object({
+    text: z.string(),
+    start: z.string(),
+    duration: z.string()
+  })),
+  fullText: z.string(),
+  startTime: z.number(),
+  endTime: z.number()
+});
+
+// Schema for segments array
+const segmentsArraySchema = z.object({
+  segments: z.array(segmentSchema)
+});
+
+// Process all segments - will receive the segments array
+const processAllSegments = createStep({
+  id: 'process-all-segments',
+  inputSchema: segmentsArraySchema,
+  outputSchema: z.object({
+    segmentResults: z.array(z.object({
+      segmentId: z.number(),
+      keywords: z.array(z.string()),
+      chapters: z.array(z.object({
+        timestamp: z.string(),
+        title: z.string(),
+        startTime: z.number(),
+        endTime: z.number(),
+        transcript: z.string(),
+        keywords: z.array(z.string())
+      }))
+    }))
+  }),
+  execute: async ({ inputData, mastra }) => {
+    const { segments } = inputData;
+    
+    // Process each segment in parallel using Promise.all
+    const results = await Promise.all(segments.map(async (segment) => {
+      // Step 1: Generate keywords for segment
+      const keywordsResult = await generateKeywordsForSegment.execute({ 
+        inputData: { segmentId: segment.segmentId, fullText: segment.fullText },
+        mastra 
+      } as any);
+      
+      // Step 2: Generate chapters for segment
+      const chaptersResult = await generateChaptersForSegment.execute({ 
+        inputData: { 
+          segmentId: segment.segmentId, 
+          transcript: segment.transcript, 
+          keywords: keywordsResult.keywords 
+        },
+        mastra 
+      } as any);
+      
+      // Step 3: Extract chapter transcripts for segment
+      const enrichedResult = await extractChapterTranscriptsForSegment.execute({ 
+        inputData: { 
+          segmentId: segment.segmentId,
+          chapters: chaptersResult.chapters,
+          keywords: keywordsResult.keywords,
+          transcript: segment.transcript
+        },
+        mastra 
+      } as any);
+      
+      return {
+        segmentId: enrichedResult.segmentId,
+        keywords: keywordsResult.keywords,
+        chapters: enrichedResult.chapters
+      };
+    }));
+    
+    // Return results in expected format
+    return {
+      segmentResults: results
+    };
+  }
+});
+
+
+// Step 8: Chunk chapters using the chunker tool
 const chunkChapters = createStep(youtubeChapterChunkerTool);
 
 // Step 7: Generate embeddings and store in PgVector
@@ -305,16 +682,36 @@ const generateAndStoreEmbeddings = createStep({
       channelId: z.string(),
       publishedAt: z.string(),
       duration: z.string(),
-      viewCount: z.string().optional(),
-      likeCount: z.string().optional(),
-      commentCount: z.string().optional(),
+      viewCount: z.string().nullish(),
+      likeCount: z.string().nullish(),
+      commentCount: z.string().nullish(),
       tags: z.array(z.string()).optional(),
       thumbnails: z.object({
-        default: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-        medium: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-        high: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-        standard: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
-        maxres: z.object({ url: z.string(), width: z.number(), height: z.number() }).optional(),
+        default: z.object({ 
+          url: z.string().nullish(), 
+          width: z.number().nullish(), 
+          height: z.number().nullish() 
+        }).nullish(),
+        medium: z.object({ 
+          url: z.string().nullish(), 
+          width: z.number().nullish(), 
+          height: z.number().nullish() 
+        }).nullish(),
+        high: z.object({ 
+          url: z.string().nullish(), 
+          width: z.number().nullish(), 
+          height: z.number().nullish() 
+        }).nullish(),
+        standard: z.object({ 
+          url: z.string().nullish(), 
+          width: z.number().nullish(), 
+          height: z.number().nullish() 
+        }).nullish(),
+        maxres: z.object({ 
+          url: z.string().nullish(), 
+          width: z.number().nullish(), 
+          height: z.number().nullish() 
+        }).nullish(),
       })
     })
   }),
@@ -550,36 +947,17 @@ export const youtubeRagWorkflow = createWorkflow({
   }))
   // Step 2: Fetch transcript
   .then(fetchTranscript)
-  // Step 3: Generate keywords - pass fullText to the step
+  // Step 3: Segment the transcript
   .map(async ({ inputData }) => ({
+    transcript: inputData.transcript,
     fullText: inputData.fullText
   }))
-  .then(generateKeywords)
-  // Step 4: Generate chapters - combine transcript and keywords
-  .map(async ({ getStepResult }) => {
-    const transcriptData = getStepResult(fetchTranscript);
-    const keywordsData = getStepResult(generateKeywords);
-    
-    return {
-      transcript: transcriptData.transcript,
-      keywords: keywordsData.keywords
-    };
-  })
-  .then(generateChapters)
-  // Step 5: Extract chapter transcripts - combine all data
-  .map(async ({ getStepResult }) => {
-    const transcriptData = getStepResult(fetchTranscript);
-    const keywordsData = getStepResult(generateKeywords);
-    const chaptersData = getStepResult(generateChapters);
-    
-    return {
-      chapters: chaptersData.chapters,
-      keywords: keywordsData.keywords,
-      transcript: transcriptData.transcript
-    };
-  })
-  .then(extractChapterTranscripts)
-  // Step 6: Chunk the chapters - map data to tool input format
+  .then(segmentTranscript)
+  // Step 4-6: Process all segments with internal parallelization
+  .then(processAllSegments)
+  // Step 7: Merge segment results (already in correct format)
+  .then(mergeSegmentResults)
+  // Step 8: Chunk the chapters - map data to tool input format
   .map(async ({ inputData, getStepResult }) => {
     const metadataData = getStepResult(fetchMetadata);
     return {
@@ -595,7 +973,7 @@ export const youtubeRagWorkflow = createWorkflow({
     };
   })
   .then(chunkChapters)
-  // Step 7: Generate embeddings and store in PgVector
+  // Step 9: Generate embeddings and store in PgVector
   .map(async ({ inputData, getStepResult, getInitData }) => {
     const metadataData = getStepResult(fetchMetadata);
     return {
@@ -624,8 +1002,7 @@ export const youtubeRagWorkflow = createWorkflow({
     const initData = getInitData();
     const metadataData = getStepResult(fetchMetadata);
     const transcriptData = getStepResult(fetchTranscript);
-    const keywordsData = getStepResult(generateKeywords);
-    const enrichedChaptersData = getStepResult(extractChapterTranscripts);
+    const mergedData = getStepResult(mergeSegmentResults);
     const chunkingResult = getStepResult(chunkChapters);
     const embeddingResult = inputData;
     
@@ -637,8 +1014,8 @@ export const youtubeRagWorkflow = createWorkflow({
       publishedAt: metadataData.publishedAt,
       duration: metadataData.duration,
       fullTranscript: transcriptData.fullText,
-      keywords: keywordsData.keywords,
-      chapters: enrichedChaptersData.chapters,
+      keywords: mergedData.keywords,
+      chapters: mergedData.chapters,
       chunks: embeddingResult.chunks,
       chunkingStats: chunkingResult.stats,
       embeddingStats: embeddingResult.embeddingStats

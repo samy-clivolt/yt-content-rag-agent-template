@@ -20,12 +20,13 @@ This template demonstrates how to build a comprehensive YouTube content analysis
 
 ## Prerequisites
 
-- Node.js 20.9.0 or higher
+- Node.js 18.0.0 or higher (20.9.0+ recommended)
+- pnpm (recommended) or npm
 - PostgreSQL 12+ with pgvector extension
 - API Keys:
-  - OpenAI API key
-  - YouTube Data API v3 key
-  - Apify API token
+  - OpenAI API key (for embeddings)
+  - YouTube Data API v3 key (for video metadata)
+  - Apify API token (for transcript extraction)
 
 ## Quick Start
 
@@ -34,18 +35,31 @@ This template demonstrates how to build a comprehensive YouTube content analysis
 ```bash
 git clone https://github.com/yourusername/yt-content-rag-agent.git
 cd yt-content-rag-agent
-npm install
+pnpm install  # or npm install
 ```
 
-### 2. Database Setup
+### 2. Environment Setup
 
-Run the automated setup script:
+We provide automated setup scripts to simplify configuration:
 
 ```bash
-./scripts/quick-setup.sh
+# 1. Check prerequisites
+pnpm run setup:check
+
+# 2. Configure environment variables
+pnpm run setup:env
+
+# 3. Set up database
+pnpm run setup:db
 ```
 
-Or set up manually:
+Or run all setup steps at once:
+
+```bash
+pnpm run setup
+```
+
+### 3. Database Setup (Manual)
 
 **macOS:**
 ```bash
@@ -90,9 +104,9 @@ sudo -u postgres psql -c "CREATE DATABASE yt_rag;"
 sudo -u postgres psql -d yt_rag -f scripts/setup-database.sql
 ```
 
-### 3. Configure Environment
+### 4. Configure Environment (Manual)
 
-Copy `.env.example` to `.env` and fill in your API keys:
+If you prefer manual setup, copy `.env.example` to `.env` and configure:
 
 ```bash
 cp .env.example .env
@@ -100,16 +114,16 @@ cp .env.example .env
 
 Required environment variables:
 - `POSTGRES_CONNECTION_STRING`: PostgreSQL connection with pgvector
-- `OPENAI_API_KEY`: For embeddings and LLM operations ([Get your key](https://platform.openai.com/api-keys))
-- `YOUTUBE_API_KEY`: For fetching video metadata (see below for setup instructions)
+- `OPENAI_API_KEY`: For embeddings ([Get your key](https://platform.openai.com/api-keys))
+- `YOUTUBE_API_KEY`: For fetching video metadata (see instructions below)
 - `APIFY_API_TOKEN`: For extracting transcripts ([Get your token](https://console.apify.com/account/integrations))
 
-#### How to get a YouTube API Key:
+#### Getting a YouTube Data API Key
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
 3. Enable the YouTube Data API v3:
-   - Go to "APIs & Services" → "Library"
+   - Navigate to "APIs & Services" → "Library"
    - Search for "YouTube Data API v3"
    - Click on it and press "Enable"
 4. Create credentials:
@@ -122,13 +136,38 @@ Required environment variables:
    - Select "YouTube Data API v3"
    - Save
 
-### 4. Start the Application
+#### Getting an Apify API Token
+
+This template uses the [YouTube Transcript Scraper](https://console.apify.com/actors/faVsWy9VTSNVIhWpR/input) actor from Apify.
+
+**Pricing**: $7 per 1000 transcript extractions
+
+1. Create an account at [Apify](https://console.apify.com/sign-up)
+2. Navigate to [Account → Integrations](https://console.apify.com/account/integrations)
+3. Copy your API token
+4. (Optional) Add credits to your account:
+   - Go to [Billing](https://console.apify.com/billing)
+   - Add a payment method
+   - Purchase credits based on your usage needs
+
+
+### 5. Additional Scripts
 
 ```bash
-npm run dev
+# Create hybrid search indexes
+pnpm run setup:db:indexes
+
+# Reset database (WARNING: deletes all data)
+pnpm run db:reset
 ```
 
-The Mastra server will start on http://localhost:4111
+### 6. Start the Application
+
+```bash
+pnpm run dev
+```
+
+The Mastra server will start on http://localhost:4111 (configurable via PORT in .env)
 
 ## Architecture
 
@@ -209,6 +248,26 @@ const response = await agent.generate(
 );
 ```
 
+## Database Schema
+
+The application uses PostgreSQL with pgvector for semantic search. The database is organized in the `yt_rag` schema with the following tables:
+
+### Core Tables
+- **indexed_videos**: Tracks all processed YouTube videos
+- **search_logs**: Analytics for search queries and results
+
+### Vector Index Tables (created dynamically)
+- **demo_videos**: Example video embeddings
+- **mastra_lives**: Mastra Live stream embeddings
+- **prompt_engineering**: Prompt engineering video embeddings
+- Custom indexes can be created with any name
+
+Each vector table contains:
+- `id`: Primary key
+- `vector_id`: Unique identifier for the chunk
+- `embedding`: Vector representation (1536 dimensions)
+- `metadata`: JSONB with video details, timestamps, and content
+
 ## Project Structure
 
 ```
@@ -219,7 +278,14 @@ yt-content-rag-agent/
 │       ├── agents/           # AI agents
 │       ├── tools/            # Mastra tools
 │       └── workflows/        # Processing workflows
-├── scripts/                  # Database setup scripts
+├── scripts/                  # Setup and utility scripts
+│   ├── check-requirements.js # Verify prerequisites
+│   ├── setup-env.js         # Configure environment
+│   ├── setup-database.js    # Database setup wrapper
+│   ├── setup-database.sh    # Database creation script
+│   ├── setup-database.sql   # Schema definitions
+│   ├── reset-database.js    # Reset all data
+│   └── create-all-hybrid-indexes.sh # Optimize search
 ├── .env.example             # Environment template
 ├── package.json
 └── tsconfig.json
